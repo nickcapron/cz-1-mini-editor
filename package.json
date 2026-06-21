@@ -1,0 +1,15 @@
+{
+  "name": "cz1-mini-patch-generator",
+  "version": "0.1.0",
+  "description": "Desktop patch generator / live editor for the Behringer CZ-1 MINI",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --enable-logging"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "latest"
+  }
+}

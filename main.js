@@ -1,0 +1,75 @@
+// Electron main process for the CZ-1 MINI patch generator.
+// Responsibilities:
+//   - create the window
+//   - grant Web MIDI (incl. SysEx) permission so the renderer can talk to the synth
+//   - expose minimal file save/load over IPC for storing patches as JSON
+
+const { app, BrowserWindow, ipcMain, dialog, session } = require('electron');
+const path = require('path');
+const fs = require('fs/promises');
+
+let mainWindow = null;
+
+function grantMidi(permission) {
+  return permission === 'midi' || permission === 'midiSysex';
+}
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1280,
+    height: 860,
+    minWidth: 900,
+    minHeight: 600,
+    title: 'CZ-1 MINI Patch Generator',
+    backgroundColor: '#14161c',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+  mainWindow.removeMenu();
+}
+
+app.whenReady().then(() => {
+  // Web MIDI + SysEx require explicit permission grants in Electron's Chromium.
+  const ses = session.defaultSession;
+  ses.setPermissionRequestHandler((wc, permission, callback) => callback(grantMidi(permission)));
+  ses.setPermissionCheckHandler((wc, permission) => grantMidi(permission));
+
+  createWindow();
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});
+
+// ---- Patch file IPC -------------------------------------------------------
+
+ipcMain.handle('patch:save', async (_evt, { suggestedName, json }) => {
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Save patch',
+    defaultPath: suggestedName || 'patch.cz1.json',
+    filters: [{ name: 'CZ-1 patch', extensions: ['cz1.json', 'json'] }]
+  });
+  if (canceled || !filePath) return { ok: false, canceled: true };
+  await fs.writeFile(filePath, json, 'utf8');
+  return { ok: true, filePath };
+});
+
+ipcMain.handle('patch:load', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Load patch',
+    properties: ['openFile'],
+    filters: [{ name: 'CZ-1 patch', extensions: ['cz1.json', 'json'] }]
+  });
+  if (canceled || !filePaths.length) return { ok: false, canceled: true };
+  const json = await fs.readFile(filePaths[0], 'utf8');
+  return { ok: true, filePath: filePaths[0], json };
+});

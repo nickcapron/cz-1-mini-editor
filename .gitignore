@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Logs / scratch
+*.log
+
+# Local tooling / editor state
+.claude/
+
+# Third-party reference (not ours to redistribute)
+ref-editor-script.js
+
+# Saved patches (user data)
+*.cz1.json

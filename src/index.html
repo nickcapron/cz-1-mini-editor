@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>CZ-1 MINI Patch Generator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header id="toolbar">
+    <div class="brand">CZ-1&nbsp;MINI <span>patch generator</span></div>
+
+    <div class="io">
+      <label>Out <select id="outSel"></select></label>
+      <label>In <select id="inSel"></select></label>
+      <label>Ch <select id="chSel"></select></label>
+      <span id="status" class="status off">no device</span>
+    </div>
+
+    <div class="actions">
+      <label class="line-toggle">Active line
+        <select id="lineSel"><option value="0">Line 1</option><option value="1">Line 2</option></select>
+      </label>
+      <button id="btnRandom" title="Generate a new patch">Randomize</button>
+      <button id="btnSendAll" title="Stream every parameter to the synth">Send All</button>
+      <button id="btnInit">Init</button>
+      <button id="btnSave">Save…</button>
+      <button id="btnLoad">Load…</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="editor"><!-- generated --></section>
+
+    <aside id="side">
+      <div class="panel">
+        <h3>Write to synth memory</h3>
+        <p class="hint">Experimental SysEx — confirm with a capture first.</p>
+        <div class="row">
+          <label>Slot <input id="memSlot" type="number" min="1" max="64" value="1" /></label>
+          <button id="btnWrite">Write</button>
+        </div>
+        <div class="row">
+          <button id="btnRequest" title="Ask the synth to send its current tone">Request from synth</button>
+          <button id="btnReplay" disabled title="Re-send the last captured dump">Replay capture</button>
+        </div>
+      </div>
+
+      <div class="panel grow">
+        <h3>MIDI Monitor <button id="btnLearn" class="small">Learn</button></h3>
+        <p class="hint" id="learnHint">Move a knob on the CZ-1 MINI to see its CC. In Learn mode, click a control then move the knob to bind it.</p>
+        <div id="monitor"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Patch</h3>
+        <div class="row"><label>Name <input id="patchName" type="text" value="New Patch" /></label></div>
+        <div class="row"><span class="hint" id="seedLabel">seed —</span></div>
+      </div>
+    </aside>
+  </main>
+
+  <script type="module" src="renderer.js"></script>
+</body>
+</html>
