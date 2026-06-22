@@ -21,17 +21,19 @@
 
 export const BANK_SELECT_CC = 0;
 
+// Ordered for a subtractive-synth mindset: Oscillator -> Filter -> Amp -> Tone,
+// then the rest, with the rarely-touched Pitch envelope near the end.
 export const SECTIONS = [
-  { id: 'waveforms', label: 'DCO Waveforms', kind: 'controls' },
+  { id: 'waveforms', label: 'Oscillator', kind: 'controls' },
+  { id: 'filter', label: 'Filter (resonant)', kind: 'controls' },
+  { id: 'dcaEnv', label: 'Amp Envelope', kind: 'envelope' },
+  { id: 'dcwEnv', label: 'Tone Envelope', kind: 'envelope' },
   { id: 'line', label: 'Line / Detune', kind: 'controls' },
-  { id: 'pitchEnv', label: 'PITCH (DCO) Envelope', kind: 'envelope' },
-  { id: 'dcwEnv', label: 'DCW Envelope', kind: 'envelope' },
-  { id: 'dcaEnv', label: 'DCA Envelope', kind: 'envelope' },
   { id: 'keyfollow', label: 'Key Follow', kind: 'controls' },
   { id: 'vibrato', label: 'Vibrato', kind: 'controls' },
   { id: 'lfo', label: 'LFO 1', kind: 'controls' },
-  { id: 'filter', label: 'Filter (hybrid)', kind: 'controls' },
-  { id: 'chorus', label: 'Chorus (hybrid)', kind: 'controls' },
+  { id: 'chorus', label: 'Chorus', kind: 'controls' },
+  { id: 'pitchEnv', label: 'Pitch Envelope', kind: 'envelope' },
   { id: 'global', label: 'Global', kind: 'controls' }
 ];
 

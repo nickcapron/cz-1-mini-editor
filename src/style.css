@@ -65,6 +65,28 @@ main { flex: 1; display: flex; min-height: 0; }
 .ctl.bound { outline: 1px solid var(--accent2); outline-offset: 2px; border-radius: 4px; }
 .ctl.learnsel { background: #2a2030; border-radius: 4px; }
 
+.card.legend { grid-column: 1 / -1; background: var(--panel2); }
+.card.legend .hint { font-size: 12px; line-height: 1.6; }
+.card.legend b { color: var(--accent2); }
+
+/* Envelope cards: ADSR macros up front, full grid behind a disclosure */
+.card.envelope h2 { display: flex; align-items: center; gap: 8px; }
+.custombadge {
+  display: none; font-size: 9px; text-transform: uppercase; letter-spacing: .5px;
+  background: var(--warn); color: #111; border-radius: 8px; padding: 1px 6px; font-weight: 700;
+}
+.macros { margin-bottom: 6px; }
+.ctl.macro > label { color: var(--text); font-weight: 600; }
+.ctl.macro input[type=range] { accent-color: var(--accent2); }
+details.adv { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 6px; }
+details.adv > summary {
+  cursor: pointer; color: var(--dim); font-size: 11px; list-style: none; user-select: none;
+  padding: 2px 0;
+}
+details.adv > summary::before { content: "▸ "; color: var(--accent2); }
+details.adv[open] > summary::before { content: "▾ "; }
+details.adv > summary:hover { color: var(--text); }
+
 /* Envelope grid */
 .envgrid { display: grid; grid-template-columns: 60px repeat(8, 1fr); gap: 4px; align-items: end; }
 .envgrid .hd { color: var(--dim); font-size: 10px; text-align: center; }

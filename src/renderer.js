@@ -1,18 +1,21 @@
 import { PARAMS, PARAMS_BY_ID, SECTIONS, BANK_SELECT_CC, defaultPatch, isPerLine, valueToIndex, indexToValue } from './params.js';
+import { ENVELOPES, ENV_BY_SECTION, adsrToStages, stagesToAdsr, randomMacro, susPointIndex, endPointStage } from './envelopes.js';
 import { Midi } from './midi.js';
 import { randomPatch } from './randomizer.js';
 import { buildToneDump, buildToneRequest, looksLikeCasioTone, hex } from './sysex.js';
 
 const midi = new Midi();
+const ENV_SECTIONS = new Set(ENVELOPES.map((e) => e.section));
 
 // ---- Patch state ----------------------------------------------------------
-// Globals live once; per-line params (bank + split) live twice — one per line.
-// Every stored value is a raw 0-127 CC value (enums included).
 let activeLine = 0;
 let globals = {};
 let lines = [{}, {}];
+let macroState = [{}, {}];          // [line][section] -> { attack, decay, ... }
+let envCustom = [{}, {}];           // [line][section] -> bool
 let currentSeed = null;
-const controls = {};            // id -> { el, input, set(v) }
+const controls = {};                // CC param id -> { el, input, set(v) }
+const macroControls = {};           // section -> { key -> set(v), badge: el }
 let lastCapture = null;
 
 const getVal = (p) => (isPerLine(p) ? lines[activeLine][p.id] : globals[p.id]);
@@ -24,15 +27,30 @@ function loadFlat(src) {
     const v = src[p.id] ?? p.def;
     if (isPerLine(p)) { lines[0][p.id] = v; lines[1][p.id] = v; } else globals[p.id] = v;
   }
+  deriveAllMacros();
 }
 function loadStructured(s) {
   globals = { ...defaultsGlobals(), ...(s.globals || {}) };
   lines = [{ ...s.lines?.[0] }, { ...s.lines?.[1] }];
   for (const p of PARAMS) if (isPerLine(p)) for (const ln of [0, 1]) if (lines[ln][p.id] == null) lines[ln][p.id] = p.def;
+  deriveAllMacros();
 }
 function structured() { return { name: document.getElementById('patchName').value, seed: currentSeed, globals, lines }; }
 
-// ---- CC overrides (from MIDI Learn), persisted ----------------------------
+// Recompute ADSR knob positions + custom flags from the stage values.
+function deriveAllMacros() {
+  for (const line of [0, 1]) {
+    macroState[line] = {}; envCustom[line] = {};
+    for (const env of ENVELOPES) {
+      if (env.advancedOnly) continue;
+      const { macro, custom } = stagesToAdsr(env, lines[line]);
+      macroState[line][env.section] = macro;
+      envCustom[line][env.section] = custom;
+    }
+  }
+}
+
+// ---- CC overrides (MIDI Learn), persisted ---------------------------------
 const overrides = JSON.parse(localStorage.getItem('ccOverrides') || '{}');
 for (const [id, cc] of Object.entries(overrides)) if (PARAMS_BY_ID[id]) { PARAMS_BY_ID[id].cc = cc; PARAMS_BY_ID[id].verify = false; }
 function saveOverride(id, cc) { overrides[id] = cc; localStorage.setItem('ccOverrides', JSON.stringify(overrides)); }
@@ -41,12 +59,17 @@ function saveOverride(id, cc) { overrides[id] = cc; localStorage.setItem('ccOver
 const editor = document.getElementById('editor');
 const ccBadge = (p) => `CC${p.cc}` + (p.cc2 != null ? `/${p.cc2}` : '') + (p.line === 'bank' ? ' (bank)' : p.line === 'split' ? ' (per-line)' : '');
 
+function pointLabel(p, v) {
+  if (p.id.endsWith('_sus')) return `pt ${susPointIndex(v)}`;
+  if (p.id.endsWith('_end')) return `pt ${endPointStage(v)}`;
+  return String(v);
+}
+
 function buildControlRow(p) {
   const row = document.createElement('div');
   row.className = 'ctl' + (p.verify ? ' verify' : '');
   row.dataset.id = p.id;
   row.title = ccBadge(p);
-
   const label = document.createElement('label');
   label.textContent = p.label;
   row.appendChild(label);
@@ -64,19 +87,16 @@ function buildControlRow(p) {
   }
   row.appendChild(input);
   row.appendChild(val || document.createElement('span'));
-
   row.addEventListener('click', () => selectForLearn(p, row));
   controls[p.id] = {
     el: row, input,
-    set(v) { if (p.type === 'enum') input.value = valueToIndex(p, v); else { input.value = v; if (val) val.textContent = v; } }
+    set(v) { if (p.type === 'enum') input.value = valueToIndex(p, v); else { input.value = v; if (val) val.textContent = pointLabel(p, v); } }
   };
   return row;
 }
 
-function buildEnvelope(section, ps) {
-  const card = document.createElement('div');
-  card.className = 'card envelope';
-  card.innerHTML = `<h2>${section.label}</h2>`;
+function buildEnvelopeGrid(section, ps) {
+  const wrap = document.createElement('div');
   const levels = ps.filter((p) => p.lane === 'level').sort((a, b) => a.index - b.index);
   const rates = ps.filter((p) => p.lane === 'rate').sort((a, b) => a.index - b.index);
   const grid = document.createElement('div'); grid.className = 'envgrid';
@@ -86,10 +106,54 @@ function buildEnvelope(section, ps) {
   levels.forEach((p) => grid.appendChild(vSlider(p)));
   grid.appendChild(cell('rhd', 'Rate'));
   rates.forEach((p) => grid.appendChild(vSlider(p)));
-  card.appendChild(grid);
+  wrap.appendChild(grid);
   const pts = document.createElement('div'); pts.className = 'envpoints';
   ps.filter((p) => !p.lane).forEach((p) => pts.appendChild(buildControlRow(p)));
-  card.appendChild(pts);
+  wrap.appendChild(pts);
+  return wrap;
+}
+
+function buildMacroRow(env, def) {
+  const row = document.createElement('div');
+  row.className = 'ctl macro';
+  const label = document.createElement('label'); label.textContent = def.label;
+  const input = document.createElement('input');
+  input.type = 'range'; input.min = 0; input.max = 127;
+  const val = document.createElement('span'); val.className = 'val';
+  input.addEventListener('input', () => { val.textContent = input.value; onMacroEdit(env, def.key, +input.value); });
+  row.appendChild(label); row.appendChild(input); row.appendChild(val);
+  macroControls[env.section] = macroControls[env.section] || {};
+  macroControls[env.section][def.key] = { set(v) { input.value = v; val.textContent = v; } };
+  return row;
+}
+
+function buildEnvelopeCard(section) {
+  const env = ENV_BY_SECTION[section.id];
+  const ps = PARAMS.filter((p) => p.section === section.id);
+  const card = document.createElement('div'); card.className = 'card envelope';
+  const head = document.createElement('h2');
+  head.textContent = section.label;
+  const badge = document.createElement('span'); badge.className = 'custombadge'; badge.textContent = 'custom';
+  head.appendChild(badge);
+  card.appendChild(head);
+  macroControls[section.id] = macroControls[section.id] || {};
+  macroControls[section.id].badge = badge;
+
+  if (env && !env.advancedOnly) {
+    const macros = document.createElement('div'); macros.className = 'macros';
+    env.macros.forEach((d) => macros.appendChild(buildMacroRow(env, d)));
+    card.appendChild(macros);
+  } else {
+    const note = document.createElement('p'); note.className = 'hint';
+    note.textContent = 'Pitch envelope — usually left flat. Open below only for pitch sweeps/blips.';
+    card.appendChild(note);
+  }
+
+  const det = document.createElement('details'); det.className = 'adv';
+  const sum = document.createElement('summary'); sum.textContent = 'Advanced stages (full 8-stage envelope)';
+  det.appendChild(sum);
+  det.appendChild(buildEnvelopeGrid(section, ps));
+  card.appendChild(det);
   return card;
 }
 
@@ -106,12 +170,21 @@ function vSlider(p) {
   return wrap;
 }
 
+function legend() {
+  const d = document.createElement('div'); d.className = 'card legend';
+  d.innerHTML = `<h2>Subtractive map</h2><p class="hint">
+    <b>Amp</b> = volume ADSR (DCA) &nbsp;·&nbsp; <b>Tone</b> = brightness envelope (DCW, phase-distortion's "filter") &nbsp;·&nbsp;
+    <b>Filter</b> = real resonant filter &nbsp;·&nbsp; each envelope's <b>Advanced stages</b> reveal the full CZ 8-stage editor.</p>`;
+  return d;
+}
+
 function buildUI() {
   editor.innerHTML = '';
+  editor.appendChild(legend());
   for (const section of SECTIONS) {
     const ps = PARAMS.filter((p) => p.section === section.id);
     if (!ps.length) continue;
-    if (section.kind === 'envelope') { editor.appendChild(buildEnvelope(section, ps)); continue; }
+    if (section.kind === 'envelope') { editor.appendChild(buildEnvelopeCard(section)); continue; }
     const card = document.createElement('div'); card.className = 'card';
     card.innerHTML = `<h2>${section.label}</h2>`;
     ps.forEach((p) => card.appendChild(buildControlRow(p)));
@@ -120,22 +193,61 @@ function buildUI() {
 }
 
 // ---- Edit + send ----------------------------------------------------------
-function onEdit(p, value) { setVal(p, value); midi.sendParam(p, value, activeLine); }
+function onEdit(p, value) {
+  setVal(p, value);
+  midi.sendParam(p, value, activeLine);
+  // A direct edit of an envelope stage may break the simple ADSR shape.
+  if (ENV_SECTIONS.has(p.section)) {
+    const env = ENV_BY_SECTION[p.section];
+    if (env && !env.advancedOnly) { refreshMacros(p.section); }
+  }
+}
+
+// Send every stage CC of one envelope for a line (bank-select once).
+function sendEnvStages(section, line) {
+  midi.sendCC(BANK_SELECT_CC, line);
+  for (const p of PARAMS) if (p.section === section && p.line === 'bank') midi.sendCC(p.cc, lines[line][p.id]);
+}
+
+function onMacroEdit(env, key, value) {
+  const m = macroState[activeLine][env.section];
+  m[key] = value;
+  const stages = adsrToStages(env, m);
+  for (const [pid, v] of Object.entries(stages)) { lines[activeLine][pid] = v; controls[pid]?.set(v); }
+  sendEnvStages(env.section, activeLine);
+  envCustom[activeLine][env.section] = false;
+  updateBadge(env.section);
+}
+
+function updateBadge(section) {
+  const mc = macroControls[section];
+  if (mc?.badge) mc.badge.style.display = envCustom[activeLine]?.[section] ? 'inline' : 'none';
+}
+
+function refreshMacros(section) {
+  const env = ENV_BY_SECTION[section];
+  if (!env || env.advancedOnly) return;
+  const { macro, custom } = stagesToAdsr(env, lines[activeLine]);
+  macroState[activeLine][section] = macro;
+  envCustom[activeLine][section] = custom;
+  const mc = macroControls[section] || {};
+  for (const [k, v] of Object.entries(macro)) mc[k]?.set(v);
+  updateBadge(section);
+}
 
 function refreshControls() {
   for (const p of PARAMS) controls[p.id]?.set(getVal(p));
+  for (const env of ENVELOPES) if (!env.advancedOnly) refreshMacros(env.section);
   document.getElementById('seedLabel').textContent = currentSeed == null ? 'seed —' : `seed ${currentSeed}`;
 }
 
 function sendAll() {
-  for (const line of [0, 1]) {            // bank params, per line
+  for (const line of [0, 1]) {
     midi.sendCC(BANK_SELECT_CC, line);
     for (const p of PARAMS) if (p.line === 'bank') midi.sendCC(p.cc, lines[line][p.id]);
   }
-  for (const line of [0, 1]) {            // split params, dedicated CCs
-    for (const p of PARAMS) if (p.line === 'split') midi.sendCC(line && p.cc2 != null ? p.cc2 : p.cc, lines[line][p.id]);
-  }
-  for (const p of PARAMS) if (p.line === 'global') {   // global params
+  for (const line of [0, 1]) for (const p of PARAMS) if (p.line === 'split') midi.sendCC(line && p.cc2 != null ? p.cc2 : p.cc, lines[line][p.id]);
+  for (const p of PARAMS) if (p.line === 'global') {
     midi.sendCC(p.cc, globals[p.id]);
     if (p.withBank) midi.sendCC(BANK_SELECT_CC, globals[p.id] >= 43 && globals[p.id] <= 84 ? 1 : 0);
   }
@@ -173,15 +285,13 @@ function logMsg(m) {
 
 // ---- IO wiring ------------------------------------------------------------
 function fillPorts() {
-  const outSel = document.getElementById('outSel');
-  const inSel = document.getElementById('inSel');
   const fill = (sel, ports, current) => {
     sel.innerHTML = '';
     const none = document.createElement('option'); none.value = ''; none.textContent = '— none —'; sel.appendChild(none);
     ports.forEach((p) => { const o = document.createElement('option'); o.value = p.id; o.textContent = p.name; if (current && p.id === current.id) o.selected = true; sel.appendChild(o); });
   };
-  fill(outSel, midi.outputs(), midi.output);
-  fill(inSel, midi.inputs(), midi.input);
+  fill(document.getElementById('outSel'), midi.outputs(), midi.output);
+  fill(document.getElementById('inSel'), midi.inputs(), midi.input);
   const on = !!midi.output;
   const st = document.getElementById('status');
   st.textContent = on ? midi.output.name : 'no device';
@@ -201,8 +311,15 @@ function wireToolbar() {
     const seed = (Math.random() * 1e9) | 0;
     const a = randomPatch(seed), b = randomPatch(seed ^ 0x9e3779b9);
     for (const p of PARAMS) {
-      if (isPerLine(p)) { lines[0][p.id] = a[p.id]; lines[1][p.id] = b[p.id]; }
-      else globals[p.id] = a[p.id];
+      if (ENV_SECTIONS.has(p.section)) continue; // envelopes handled via macros below
+      if (isPerLine(p)) { lines[0][p.id] = a[p.id]; lines[1][p.id] = b[p.id]; } else globals[p.id] = a[p.id];
+    }
+    for (const env of ENVELOPES) for (const line of [0, 1]) {
+      if (env.advancedOnly) continue;
+      const m = randomMacro(env);
+      macroState[line][env.section] = m;
+      Object.assign(lines[line], adsrToStages(env, m));
+      envCustom[line][env.section] = false;
     }
     currentSeed = seed; refreshControls(); sendAll();
   });
