@@ -41,6 +41,7 @@ export function randomPatch(seed = (Math.random() * 1e9) | 0, amount = 1) {
 
   // Sensible touch-ups.
   patch.dcaEnv_l0 = 0;                 // amp envelope should start silent
+  for (let i = 0; i < 8; i++) patch[`pitchEnv_l${i}`] = 0; // flat pitch: in tune, no glide on release
   patch.flt_cutoff = r(70, 127);       // keep it audible
   patch.vib_depth = r(0, 40);          // subtle vibrato
   patch.seed = seed;

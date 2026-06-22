@@ -8,19 +8,30 @@
 //
 // Simple ADSR uses only the first three stages:
 //   stage 0: rate=Attack   level=peak
-//   stage 1: rate=Decay     level=sustain     (sustain point = 1)
-//   stage 2: rate=Release   level=floor       (end point = 2)
+//   stage 1: rate=Decay     level=sustain     (sustain point lives here)
+//   stage 2: rate=Release   level=floor       (end point lives here)
 //   stages 3..7: parked at floor (unused)
 //
-// CZ rate convention is assumed "higher = faster" (so time = 127 - rate). This is
-// the one bit still to calibrate on hardware; flip RATE_INVERTED if attack/release
-// feel backwards.
+// CZ rate convention is assumed "higher = faster" (so time = 127 - rate). The
+// instant attack on hardware confirms this direction is correct.
+//
+// POINT_OFFSET: the hardware places the sustain/end POINT one stage EARLIER than
+// our stage numbering — a held note froze at the attack peak (stage 0) instead of
+// decaying to the sustain level (stage 1). Bumping both points by +1 stage makes a
+// held note settle on the sustain level and release from there. Set to 0 to revert
+// if a future hardware recheck shows the points are already aligned.
 // ---------------------------------------------------------------------------
 
 const clamp = (v) => Math.max(0, Math.min(127, Math.round(v)));
 const RATE_INVERTED = true;
 const rateFromTime = (t) => clamp(RATE_INVERTED ? 127 - t : t);
 const timeFromRate = (r) => clamp(RATE_INVERTED ? 127 - r : r);
+
+// ADSR sustain sits on stage 1, release floor on stage 2 (our numbering);
+// POINT_OFFSET shifts the emitted point CCs to match the hardware's indexing.
+const SUS_STAGE = 1;
+const END_STAGE = 2;
+const POINT_OFFSET = 1;
 
 // Sustain point is a 0-127 CC quantised into 8 zones (stage 0..7).
 const SUS_VALUES = [9, 27, 45, 63, 81, 99, 117, 127];
@@ -100,8 +111,8 @@ export function adsrToStages(env, m) {
   set('l1', sustain); set('r1', rateFromTime(m.decay));
   set('l2', floor); set('r2', rateFromTime(m.release));
   for (let i = 3; i < 8; i++) { set(`l${i}`, floor); set(`r${i}`, 127); }
-  out[`${s}_sus`] = susPointValue(1);
-  out[`${s}_end`] = endPointValue(2);
+  out[`${s}_sus`] = susPointValue(SUS_STAGE + POINT_OFFSET);
+  out[`${s}_end`] = endPointValue(END_STAGE + POINT_OFFSET);
   return out;
 }
 
@@ -124,7 +135,7 @@ export function stagesToAdsr(env, vals) {
     m.release = timeFromRate(g('r2'));
   }
   // Custom if the parts ADSR doesn't touch have been moved away from the simple shape.
-  let custom = susPointIndex(g('sus')) !== 1 || endPointStage(g('end')) !== 2 || g('l2') > 4;
+  let custom = susPointIndex(g('sus')) !== SUS_STAGE + POINT_OFFSET || endPointStage(g('end')) !== END_STAGE + POINT_OFFSET || g('l2') > 4;
   for (let i = 3; i < 8 && !custom; i++) if (g(`l${i}`) > 4) custom = true;
   return { macro: m, custom };
 }

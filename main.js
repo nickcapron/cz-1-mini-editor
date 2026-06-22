@@ -25,12 +25,18 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      sandbox: true               // preload only needs contextBridge/ipcRenderer
     }
   });
 
   mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
   mainWindow.removeMenu();
+
+  // Defense in depth: this is a fully local, single-window app — it never opens
+  // popups or navigates away, so deny both outright in case anything tries.
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.on('will-navigate', (e) => e.preventDefault());
 }
 
 app.whenReady().then(() => {

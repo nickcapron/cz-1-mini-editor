@@ -64,13 +64,18 @@ const POLARITY = en(["Down'", "Up'"], [[0, 64], [65, 127]]);
 const DET_OCT = en(["0'", "1'", "2'", "3'"], [[0, 42], [43, 84], [85, 126], [127, 127]]);
 
 // 8-stage envelope (levels + rates + sustain/end points), all bank-selected.
-function envelope(section, { sustainCC, endCC, levelCCs, rateCCs }) {
+// `levelDef` is the resting level for stages 1..7 (stage 0 always starts at 0).
+// The PITCH envelope passes 0 here: on the CZ the DCO env level is a pitch
+// DEVIATION where 0 = no shift, so an all-zero pitch env plays perfectly in
+// tune with no glide on attack/release. (The community editor's neutral default
+// is likewise all zeros.) Audio envelopes (DCW/DCA) rest at 80.
+function envelope(section, { sustainCC, endCC, levelCCs, rateCCs, levelDef = 80 }) {
   const out = [
     { id: `${section}_sus`, label: 'Sustain Pt', section, cc: sustainCC, line: 'bank', type: 'cont', min: 0, max: 127, def: 64 },
     { id: `${section}_end`, label: 'End Pt', section, cc: endCC, line: 'bank', type: 'cont', min: 0, max: 127, def: 127 }
   ];
   levelCCs.forEach((cc, i) =>
-    out.push({ id: `${section}_l${i}`, label: `L${i}`, section, cc, line: 'bank', type: 'cont', min: 0, max: 127, def: i === 0 ? 0 : 80, lane: 'level', index: i }));
+    out.push({ id: `${section}_l${i}`, label: `L${i}`, section, cc, line: 'bank', type: 'cont', min: 0, max: 127, def: i === 0 ? 0 : levelDef, lane: 'level', index: i }));
   rateCCs.forEach((cc, i) =>
     out.push({ id: `${section}_r${i}`, label: `R${i}`, section, cc, line: 'bank', type: 'cont', min: 0, max: 127, def: 80, lane: 'rate', index: i }));
   return out;
@@ -93,7 +98,7 @@ export const PARAMS = [
   cont('detune_fine', 'Detune Fine', 'line', 12, 'global', 0), // CC12 confirmed working as of firmware v1.0.3
 
   // --- Envelopes (bank-selected per line) ----------------------------------
-  ...envelope('pitchEnv', { sustainCC: 45, endCC: 46, levelCCs: [47, 48, 49, 50, 51, 52, 53, 54], rateCCs: [55, 56, 57, 58, 59, 60, 61, 62] }),
+  ...envelope('pitchEnv', { sustainCC: 45, endCC: 46, levelCCs: [47, 48, 49, 50, 51, 52, 53, 54], rateCCs: [55, 56, 57, 58, 59, 60, 61, 62], levelDef: 0 }),
   ...envelope('dcwEnv', { sustainCC: 63, endCC: 64, levelCCs: [65, 66, 67, 68, 69, 70, 71, 72], rateCCs: [73, 74, 75, 76, 77, 78, 79, 80] }),
   ...envelope('dcaEnv', { sustainCC: 27, endCC: 28, levelCCs: [29, 30, 31, 32, 33, 34, 35, 36], rateCCs: [37, 38, 39, 40, 41, 42, 43, 44] }),
 

@@ -193,7 +193,11 @@ export function redirectToEditBuffer(raw) {
   const bytes = raw instanceof Uint8Array ? raw : Uint8Array.from(raw);
   const f7 = bytes.indexOf(0xf7);
   const msg = Uint8Array.from(bytes.slice(0, f7 < 0 ? bytes.length : f7 + 1));
-  if (msg[1] === CASIO_ID && msg[5] === OP_SEND) msg[6] = PROG_EDIT_BUFFER;
+  // Only forward a genuine Casio "send tone" dump. Refuse request/other ops so a
+  // crafted .syx can't push arbitrary SysEx (e.g. a memory-bank write) to the
+  // synth — we re-address to the edit buffer, never a stored slot.
+  if (msg[0] !== 0xf0 || msg[1] !== CASIO_ID || msg[5] !== OP_SEND) return null;
+  msg[6] = PROG_EDIT_BUFFER;
   return msg;
 }
 

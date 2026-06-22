@@ -76,19 +76,27 @@ const T = (brightness, envAmount, a, d, r) => ({ brightness, envAmount, a, d, r 
 const F = (cutoff, reso, env, a, d, s, r) => ({ cutoff, reso, env, a, d, s, r });
 
 export const PRESETS = [
-  // ---- Bass --------------------------------------------------------------
-  { name: 'Electro Bass', cat: 'Bass', wf1: 'Saw', amp: A(0, 42, 78, 24), tone: T(72, 50, 0, 36, 20), filter: F(72, 30, 45, 0, 42, 38, 24) },
-  { name: 'Sub Square', cat: 'Bass', wf1: 'Square', amp: A(0, 60, 104, 28), tone: T(42, 18, 0, 50, 24), filter: F(48, 12, 25, 0, 50, 50, 24) },
-  { name: 'Reso Bass', cat: 'Bass', wf1: 'Reso I (Saw)', amp: A(0, 50, 70, 26), tone: T(66, 64, 0, 44, 22), filter: F(64, 58, 50, 0, 46, 30, 24) },
-  { name: 'Acid Bass', cat: 'Bass', wf1: 'Saw-Pulse', dcwKf: 'On', amp: A(0, 40, 60, 20), tone: T(78, 72, 0, 36, 18), filter: F(60, 80, 60, 0, 40, 24, 20) },
-  { name: 'Pluck Bass', cat: 'Bass', wf1: 'Pulse', amp: A(0, 34, 30, 18), tone: T(80, 64, 0, 30, 16), filter: F(70, 30, 46, 0, 32, 26, 18) },
-  { name: 'Saw Bass', cat: 'Bass', wf1: 'Saw', amp: A(0, 48, 84, 26), tone: T(60, 40, 0, 44, 22), filter: F(66, 18, 38, 0, 46, 46, 24) },
-  { name: 'Growl Bass', cat: 'Bass', wf1: 'Reso II (Tri)', lfo: { wave: 'Square', amount: 30, rate: 90 }, amp: A(0, 44, 72, 24), tone: T(70, 68, 0, 40, 20), filter: F(58, 66, 56, 0, 44, 30, 22) },
-  { name: 'Round Bass', cat: 'Bass', wf1: 'Double Sine', amp: A(4, 52, 90, 30), tone: T(50, 30, 2, 48, 26), filter: F(56, 14, 30, 0, 50, 60, 26) },
-  { name: 'Dark Bass', cat: 'Bass', wf1: 'Square', amp: A(0, 56, 96, 28), tone: T(36, 16, 0, 50, 24), filter: F(40, 10, 22, 0, 52, 54, 24) },
-  { name: 'Punch Bass', cat: 'Bass', wf1: 'Saw', amp: A(0, 30, 64, 20), tone: T(74, 60, 0, 28, 16), filter: F(78, 26, 52, 0, 30, 30, 18) },
-  { name: 'Detune Bass', cat: 'Bass', wf1: 'Saw', line: 'Line 1+2', detune: { fine: 8, pol: "Up'" }, amp: A(0, 46, 86, 26), tone: T(62, 44, 0, 44, 22), filter: F(64, 16, 36, 0, 46, 44, 24) },
-  { name: 'FM Bass', cat: 'Bass', wf1: 'Reso III (Trap)', amp: A(0, 40, 58, 22), tone: T(82, 70, 0, 36, 18), filter: F(72, 40, 50, 0, 38, 28, 20) },
+  // ---- Bass ---------------------------------------------------------------
+  // Mostly quick punchy "jabs": instant attack, fast decay, low/zero amp sustain
+  // so the note pops and gets out of the way. The filter envelope decays with the
+  // amp (low filter sustain) so the punch reads tonally too. A few intentionally
+  // sustained basses are kept at the end of the group.
+  { name: 'Punch Bass', cat: 'Bass', wf1: 'Saw', amp: A(0, 56, 0, 18), tone: T(74, 62, 0, 50, 18), filter: F(80, 28, 54, 0, 52, 0, 18) },
+  { name: 'Stab Bass', cat: 'Bass', wf1: 'Saw', amp: A(0, 46, 0, 16), tone: T(70, 60, 0, 42, 16), filter: F(78, 26, 52, 0, 44, 0, 16) },
+  { name: 'Electro Bass', cat: 'Bass', wf1: 'Saw', amp: A(0, 60, 10, 20), tone: T(72, 52, 0, 54, 18), filter: F(74, 30, 46, 0, 56, 8, 18) },
+  { name: 'Pluck Bass', cat: 'Bass', wf1: 'Pulse', amp: A(0, 52, 6, 18), tone: T(80, 64, 0, 48, 18), filter: F(72, 30, 46, 0, 50, 6, 18) },
+  { name: 'Acid Bass', cat: 'Bass', wf1: 'Saw-Pulse', dcwKf: 'On', amp: A(0, 50, 4, 16), tone: T(80, 72, 0, 46, 16), filter: F(62, 80, 60, 0, 48, 4, 16) },
+  { name: 'FM Bass', cat: 'Bass', wf1: 'Reso III (Trap)', amp: A(0, 54, 0, 18), tone: T(82, 70, 0, 50, 16), filter: F(72, 40, 50, 0, 52, 0, 18) },
+  { name: 'Reso Bass', cat: 'Bass', wf1: 'Reso I (Saw)', amp: A(0, 58, 10, 20), tone: T(66, 64, 0, 54, 18), filter: F(64, 58, 52, 0, 56, 8, 18) },
+  { name: 'Mute Bass', cat: 'Bass', wf1: 'Square', amp: A(0, 50, 0, 16), tone: T(54, 40, 0, 46, 16), filter: F(56, 16, 36, 0, 48, 0, 16) },
+  { name: 'Pop Bass', cat: 'Bass', wf1: 'Saw-Pulse', amp: A(0, 46, 6, 16), tone: T(84, 66, 0, 44, 16), filter: F(86, 34, 50, 0, 46, 4, 16) },
+  { name: 'Saw Bass', cat: 'Bass', wf1: 'Saw', amp: A(0, 64, 22, 22), tone: T(60, 44, 0, 58, 20), filter: F(68, 20, 40, 0, 60, 18, 20) },
+  // -- sustained basses (held tone, by design) --
+  { name: 'Sub Square', cat: 'Bass', wf1: 'Square', amp: A(0, 44, 88, 26), tone: T(42, 18, 0, 48, 22), filter: F(48, 12, 25, 0, 48, 50, 22) },
+  { name: 'Round Bass', cat: 'Bass', wf1: 'Double Sine', amp: A(4, 50, 80, 28), tone: T(50, 30, 2, 46, 24), filter: F(56, 14, 30, 0, 48, 56, 24) },
+  { name: 'Dark Bass', cat: 'Bass', wf1: 'Square', amp: A(0, 52, 86, 28), tone: T(36, 16, 0, 48, 24), filter: F(40, 10, 22, 0, 50, 52, 24) },
+  { name: 'Growl Bass', cat: 'Bass', wf1: 'Reso II (Tri)', lfo: { wave: 'Square', amount: 30, rate: 90 }, amp: A(0, 42, 68, 24), tone: T(70, 68, 0, 40, 20), filter: F(58, 66, 56, 0, 42, 30, 22) },
+  { name: 'Detune Bass', cat: 'Bass', wf1: 'Saw', line: 'Line 1+2', detune: { fine: 8, pol: "Up'" }, amp: A(0, 44, 78, 26), tone: T(62, 44, 0, 42, 22), filter: F(64, 16, 36, 0, 44, 44, 24) },
 
   // ---- Keys --------------------------------------------------------------
   { name: 'Farfisa Organ', cat: 'Keys', wf1: 'Square', wf2: 'Pulse', vib: { wave: 'Triangle', rate: 70, depth: 22, delay: 30 }, amp: A(2, 10, 127, 10), tone: T(92, 8, 2, 12, 10), filter: F(110, 10, 0, 0, 30, 110, 12) },

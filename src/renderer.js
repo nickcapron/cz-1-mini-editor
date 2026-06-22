@@ -428,7 +428,10 @@ function wireToolbar() {
     if (!looksLikeCasioTone(raw)) { flash('Not a Casio CZ .syx'); return; }
     // 1) Make it sound now: send the original bytes, re-addressed to the edit
     //    buffer so we never overwrite stored slots and the MINI decodes natively.
-    midi.sendSysex(redirectToEditBuffer(raw));
+    //    redirectToEditBuffer returns null for anything but a tone-send dump.
+    const redirected = redirectToEditBuffer(raw);
+    if (!redirected) { flash('Unsupported .syx (not a tone dump)'); return; }
+    midi.sendSysex(redirected);
     // 2) Decode for the editor (best-effort) so the knobs reflect the patch.
     const decoded = decodeSysexToPatch(raw);
     if (decoded) {
