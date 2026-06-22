@@ -1,6 +1,7 @@
 import { PARAMS, PARAMS_BY_ID, SECTIONS, BANK_SELECT_CC, defaultPatch, isPerLine, valueToIndex, indexToValue } from './params.js';
 import { ENVELOPES, ENV_BY_SECTION, adsrToStages, stagesToAdsr, randomMacro, susPointIndex, endPointStage } from './envelopes.js';
 import { createKnob } from './knob.js';
+import { PRESETS, expandPreset } from './presets.js';
 import { Midi } from './midi.js';
 import { randomPatch } from './randomizer.js';
 import { buildToneDump, buildToneRequest, looksLikeCasioTone, hex } from './sysex.js';
@@ -349,6 +350,26 @@ function wireToolbar() {
   chSel.addEventListener('change', (e) => midi.setChannel(+e.target.value));
 
   document.getElementById('lineSel').addEventListener('change', (e) => { activeLine = +e.target.value; refreshControls(); });
+
+  // Presets menu (grouped by category)
+  const presetSel = document.getElementById('presetSel');
+  const groups = {};
+  PRESETS.forEach((def, i) => {
+    const cat = def.cat || 'Other';
+    const grp = groups[cat] || (groups[cat] = document.createElement('optgroup'));
+    grp.label = cat;
+    const o = document.createElement('option'); o.value = i; o.textContent = def.name; grp.appendChild(o);
+  });
+  Object.values(groups).forEach((g) => presetSel.appendChild(g));
+  presetSel.addEventListener('change', (e) => {
+    const idx = e.target.value;
+    if (idx === '') return;
+    const def = PRESETS[+idx];
+    loadFlat(expandPreset(def));
+    currentSeed = null;
+    document.getElementById('patchName').value = def.name;
+    refreshControls(); sendAll(); flash(`Loaded ${def.name}`);
+  });
 
   document.getElementById('btnRandom').addEventListener('click', () => {
     const seed = (Math.random() * 1e9) | 0;
