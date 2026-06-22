@@ -15,8 +15,12 @@
 // Each enum lists [lo,hi] zones; we send the zone midpoint and map incoming
 // values back to a label.
 //
-// `verify:true` = still not hardware-confirmed (detune fine is disabled in the
-// live web editor; CC93 mod source is from the manual only). Use MIDI Learn.
+// `verify:true` = still not hardware-confirmed. Use MIDI Learn to confirm.
+// Note: Detune Fine (CC12) was broken on early firmware and disabled in the
+// community editor, but is FIXED as of CZ-1 MINI firmware v1.0.3, so it's
+// enabled here. CC93 mod source is still manual-only (verify). Firmware v1.0.3
+// also corrected a 1+1'/1+2 Line Mode display inversion — confirm the top two
+// Line Mode labels against hardware via the MIDI monitor.
 // ---------------------------------------------------------------------------
 
 export const BANK_SELECT_CC = 0;
@@ -86,7 +90,7 @@ export const PARAMS = [
   enumP('detune_pol', 'Detune Polarity', 'line', 9, 'global', POLARITY, 0),
   enumP('detune_oct', 'Detune Octave', 'line', 10, 'global', DET_OCT, 0),
   cont('detune_note', 'Detune Note', 'line', 11, 'global', 0),
-  cont('detune_fine', 'Detune Fine', 'line', 12, 'global', 0, { verify: true }),
+  cont('detune_fine', 'Detune Fine', 'line', 12, 'global', 0), // CC12 confirmed working as of firmware v1.0.3
 
   // --- Envelopes (bank-selected per line) ----------------------------------
   ...envelope('pitchEnv', { sustainCC: 45, endCC: 46, levelCCs: [47, 48, 49, 50, 51, 52, 53, 54], rateCCs: [55, 56, 57, 58, 59, 60, 61, 62] }),
