@@ -73,3 +73,27 @@ ipcMain.handle('patch:load', async () => {
   const json = await fs.readFile(filePaths[0], 'utf8');
   return { ok: true, filePath: filePaths[0], json };
 });
+
+// ---- Casio CZ .syx import/export (binary) ---------------------------------
+
+ipcMain.handle('syx:load', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import Casio CZ .syx',
+    properties: ['openFile'],
+    filters: [{ name: 'Casio CZ SysEx', extensions: ['syx'] }, { name: 'All files', extensions: ['*'] }]
+  });
+  if (canceled || !filePaths.length) return { ok: false, canceled: true };
+  const buf = await fs.readFile(filePaths[0]);
+  return { ok: true, filePath: filePaths[0], name: path.basename(filePaths[0]), bytes: [...buf] };
+});
+
+ipcMain.handle('syx:save', async (_evt, { suggestedName, bytes }) => {
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export .syx',
+    defaultPath: suggestedName || 'patch.syx',
+    filters: [{ name: 'Casio CZ SysEx', extensions: ['syx'] }]
+  });
+  if (canceled || !filePath) return { ok: false, canceled: true };
+  await fs.writeFile(filePath, Buffer.from(bytes));
+  return { ok: true, filePath };
+});

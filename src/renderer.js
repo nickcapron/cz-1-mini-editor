@@ -4,7 +4,7 @@ import { createKnob } from './knob.js';
 import { PRESETS, expandPreset } from './presets.js';
 import { Midi } from './midi.js';
 import { randomPatch } from './randomizer.js';
-import { buildToneDump, buildToneRequest, looksLikeCasioTone, hex } from './sysex.js';
+import { decodeSysexToPatch, encodePatchToSysex, requestTone, redirectToEditBuffer, PROG_EDIT_BUFFER, looksLikeCasioTone, hex } from './sysex.js';
 
 const midi = new Midi();
 const ENV_SECTIONS = new Set(ENVELOPES.map((e) => e.section));
@@ -404,13 +404,42 @@ function wireToolbar() {
     refreshControls(); sendAll(); flash('Loaded');
   });
 
-  document.getElementById('btnWrite').addEventListener('click', () => {
+  const targetProgram = () => {
     const slot = (+document.getElementById('memSlot').value || 1) - 1;
-    midi.sendSysex(buildToneDump({ ...globals, ...lines[activeLine] }, slot));
-    flash(`Sent write→slot ${slot + 1} (experimental)`);
+    return document.getElementById('memTarget').value === 'slot' ? (0x20 + (slot & 0x1f)) : PROG_EDIT_BUFFER;
+  };
+  document.getElementById('btnWrite').addEventListener('click', () => {
+    const program = targetProgram();
+    midi.sendSysex(encodePatchToSysex({ globals, lines }, program, midi.channel));
+    flash(program === PROG_EDIT_BUFFER ? 'Sent to edit buffer' : `Wrote → slot ${(+document.getElementById('memSlot').value || 1)}`);
   });
-  document.getElementById('btnRequest').addEventListener('click', () => { midi.sendSysex(buildToneRequest()); flash('Requested tone dump'); });
+  document.getElementById('btnRequest').addEventListener('click', () => { midi.sendSysex(requestTone(targetProgram(), midi.channel)); flash('Requested tone'); });
   document.getElementById('btnReplay').addEventListener('click', () => { if (lastCapture) { midi.sendSysex(lastCapture); flash('Replayed capture'); } });
+  document.getElementById('btnExport').addEventListener('click', async () => {
+    const name = (document.getElementById('patchName').value || 'patch').replace(/[^\w.-]+/g, '_');
+    const syx = encodePatchToSysex({ globals, lines }, PROG_EDIT_BUFFER, midi.channel);
+    const res = await window.cz1.exportSyx(`${name}.syx`, [...syx]);
+    if (res.ok) flash('Exported .syx');
+  });
+  document.getElementById('btnImport').addEventListener('click', async () => {
+    const res = await window.cz1.importSyx();
+    if (!res.ok) return;
+    const raw = Uint8Array.from(res.bytes);
+    if (!looksLikeCasioTone(raw)) { flash('Not a Casio CZ .syx'); return; }
+    // 1) Make it sound now: send the original bytes, re-addressed to the edit
+    //    buffer so we never overwrite stored slots and the MINI decodes natively.
+    midi.sendSysex(redirectToEditBuffer(raw));
+    // 2) Decode for the editor (best-effort) so the knobs reflect the patch.
+    const decoded = decodeSysexToPatch(raw);
+    if (decoded) {
+      loadStructured(decoded); currentSeed = null;
+      document.getElementById('patchName').value = (res.name || 'Imported').replace(/\.syx$/i, '');
+      refreshControls();            // NOTE: no sendAll() — the raw edit-buffer load above is authoritative
+      flash(`Imported ${res.name}`);
+    } else {
+      flash('Sent raw .syx (decode n/a)');
+    }
+  });
 
   document.getElementById('btnLearn').addEventListener('click', () => {
     learning = !learning;

@@ -28,6 +28,7 @@
       <button id="btnInit">Init</button>
       <button id="btnSave">Save…</button>
       <button id="btnLoad">Load…</button>
+      <button id="btnImport" title="Import a Casio CZ .syx patch file">Import .syx</button>
     </div>
   </header>
 
@@ -36,15 +37,24 @@
 
     <aside id="side">
       <div class="panel">
-        <h3>Write to synth memory</h3>
-        <p class="hint">Experimental SysEx — confirm with a capture first.</p>
+        <h3>Write to synth (SysEx)</h3>
+        <p class="hint">Edit buffer = hear now. Slot = store. Experimental — verify with a capture.</p>
+        <div class="row">
+          <label>Target
+            <select id="memTarget">
+              <option value="edit">Edit buffer (hear now)</option>
+              <option value="slot">Internal slot</option>
+            </select>
+          </label>
+        </div>
         <div class="row">
           <label>Slot <input id="memSlot" type="number" min="1" max="64" value="1" /></label>
           <button id="btnWrite">Write</button>
         </div>
         <div class="row">
-          <button id="btnRequest" title="Ask the synth to send its current tone">Request from synth</button>
-          <button id="btnReplay" disabled title="Re-send the last captured dump">Replay capture</button>
+          <button id="btnRequest" title="Ask the synth to send its current tone">Request</button>
+          <button id="btnReplay" disabled title="Re-send the last captured dump">Replay</button>
+          <button id="btnExport" title="Save the current patch as a Casio CZ .syx file">Export .syx</button>
         </div>
       </div>
 
