@@ -1,5 +1,6 @@
 import { PARAMS, PARAMS_BY_ID, SECTIONS, BANK_SELECT_CC, defaultPatch, isPerLine, valueToIndex, indexToValue } from './params.js';
 import { ENVELOPES, ENV_BY_SECTION, adsrToStages, stagesToAdsr, randomMacro, susPointIndex, endPointStage } from './envelopes.js';
+import { createKnob } from './knob.js';
 import { Midi } from './midi.js';
 import { randomPatch } from './randomizer.js';
 import { buildToneDump, buildToneRequest, looksLikeCasioTone, hex } from './sysex.js';
@@ -14,8 +15,9 @@ let lines = [{}, {}];
 let macroState = [{}, {}];          // [line][section] -> { attack, decay, ... }
 let envCustom = [{}, {}];           // [line][section] -> bool
 let currentSeed = null;
-const controls = {};                // CC param id -> { el, input, set(v) }
+const controls = {};                // CC param id -> { el, set(v) }
 const macroControls = {};           // section -> { key -> set(v), badge: el }
+const graphs = {};                  // section -> svg element (envelope graph)
 let lastCapture = null;
 
 const getVal = (p) => (isPerLine(p) ? lines[activeLine][p.id] : globals[p.id]);
@@ -65,33 +67,41 @@ function pointLabel(p, v) {
   return String(v);
 }
 
-function buildControlRow(p) {
+function buildControl(p) { return p.type === 'enum' ? buildEnumRow(p) : buildKnobControl(p); }
+
+function buildKnobControl(p) {
+  const isPoint = p.id.endsWith('_sus') || p.id.endsWith('_end');
+  const k = createKnob({
+    min: p.min, max: p.max, value: p.def, def: p.def, label: p.label,
+    onChange: (v) => onEdit(p, v),
+    onPick: () => selectForLearn(p, k.el)
+  });
+  k.el.classList.add('kc');
+  if (p.verify) k.el.classList.add('verify');
+  k.el.dataset.id = p.id;
+  k.el.title = ccBadge(p);
+  controls[p.id] = {
+    el: k.el,
+    set(v) {
+      k.set(v);
+      if (isPoint) k.el.querySelector('.knob-read').textContent = pointLabel(p, v);
+    }
+  };
+  return k.el;
+}
+
+function buildEnumRow(p) {
   const row = document.createElement('div');
   row.className = 'ctl' + (p.verify ? ' verify' : '');
   row.dataset.id = p.id;
   row.title = ccBadge(p);
-  const label = document.createElement('label');
-  label.textContent = p.label;
-  row.appendChild(label);
-
-  let input, val = null;
-  if (p.type === 'enum') {
-    input = document.createElement('select');
-    p.enum.names.forEach((name, i) => { const o = document.createElement('option'); o.value = i; o.textContent = name; input.appendChild(o); });
-    input.addEventListener('change', () => onEdit(p, indexToValue(p, +input.value)));
-  } else {
-    input = document.createElement('input');
-    input.type = 'range'; input.min = p.min; input.max = p.max;
-    input.addEventListener('input', () => onEdit(p, +input.value));
-    val = document.createElement('span'); val.className = 'val';
-  }
-  row.appendChild(input);
-  row.appendChild(val || document.createElement('span'));
-  row.addEventListener('click', () => selectForLearn(p, row));
-  controls[p.id] = {
-    el: row, input,
-    set(v) { if (p.type === 'enum') input.value = valueToIndex(p, v); else { input.value = v; if (val) val.textContent = pointLabel(p, v); } }
-  };
+  const label = document.createElement('label'); label.textContent = p.label;
+  const input = document.createElement('select');
+  p.enum.names.forEach((name, i) => { const o = document.createElement('option'); o.value = i; o.textContent = name; input.appendChild(o); });
+  input.addEventListener('change', () => onEdit(p, indexToValue(p, +input.value)));
+  row.append(label, input, document.createElement('span'));
+  row.addEventListener('click', (e) => { if (e.target !== input) selectForLearn(p, row); });
+  controls[p.id] = { el: row, set(v) { input.value = valueToIndex(p, v); } };
   return row;
 }
 
@@ -107,24 +117,48 @@ function buildEnvelopeGrid(section, ps) {
   grid.appendChild(cell('rhd', 'Rate'));
   rates.forEach((p) => grid.appendChild(vSlider(p)));
   wrap.appendChild(grid);
-  const pts = document.createElement('div'); pts.className = 'envpoints';
-  ps.filter((p) => !p.lane).forEach((p) => pts.appendChild(buildControlRow(p)));
+  const pts = document.createElement('div'); pts.className = 'envpoints knobs';
+  ps.filter((p) => !p.lane).forEach((p) => pts.appendChild(buildControl(p)));
   wrap.appendChild(pts);
   return wrap;
 }
 
-function buildMacroRow(env, def) {
-  const row = document.createElement('div');
-  row.className = 'ctl macro';
-  const label = document.createElement('label'); label.textContent = def.label;
-  const input = document.createElement('input');
-  input.type = 'range'; input.min = 0; input.max = 127;
-  const val = document.createElement('span'); val.className = 'val';
-  input.addEventListener('input', () => { val.textContent = input.value; onMacroEdit(env, def.key, +input.value); });
-  row.appendChild(label); row.appendChild(input); row.appendChild(val);
+function buildMacroKnob(env, def) {
+  const k = createKnob({
+    min: 0, max: 127, value: def.def, def: def.def, label: def.label,
+    onChange: (v) => onMacroEdit(env, def.key, v)
+  });
+  k.el.classList.add('kc', 'macro');
   macroControls[env.section] = macroControls[env.section] || {};
-  macroControls[env.section][def.key] = { set(v) { input.value = v; val.textContent = v; } };
-  return row;
+  macroControls[env.section][def.key] = { set(v) { k.set(v); } };
+  return k.el;
+}
+
+// Mini line-graph of the envelope contour, CZ-style.
+function buildEnvGraph(section) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'envgraph');
+  svg.setAttribute('viewBox', '0 0 100 40');
+  svg.setAttribute('preserveAspectRatio', 'none');
+  const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+  poly.setAttribute('class', 'env-line');
+  svg.appendChild(poly);
+  graphs[section] = svg;
+  return svg;
+}
+
+function updateGraph(section) {
+  const svg = graphs[section]; if (!svg) return;
+  const g = (k) => lines[activeLine][`${section}_${k}`] ?? 0;
+  const endIdx = Math.min(7, endPointStage(g('end')));
+  const pts = [[0, 0]]; let x = 0;
+  for (let i = 0; i <= endIdx; i++) {
+    x += 4 + (127 - g(`r${i}`)) / 127 * 30;
+    pts.push([x, g(`l${i}`)]);
+  }
+  const maxX = x || 1;
+  svg.querySelector('polyline').setAttribute('points',
+    pts.map(([px, lv]) => `${(px / maxX * 100).toFixed(1)},${(39 - lv / 127 * 37).toFixed(1)}`).join(' '));
 }
 
 function buildEnvelopeCard(section) {
@@ -139,9 +173,11 @@ function buildEnvelopeCard(section) {
   macroControls[section.id] = macroControls[section.id] || {};
   macroControls[section.id].badge = badge;
 
+  card.appendChild(buildEnvGraph(section.id));
+
   if (env && !env.advancedOnly) {
-    const macros = document.createElement('div'); macros.className = 'macros';
-    env.macros.forEach((d) => macros.appendChild(buildMacroRow(env, d)));
+    const macros = document.createElement('div'); macros.className = 'macros knobs';
+    env.macros.forEach((d) => macros.appendChild(buildMacroKnob(env, d)));
     card.appendChild(macros);
   } else {
     const note = document.createElement('p'); note.className = 'hint';
@@ -187,7 +223,11 @@ function buildUI() {
     if (section.kind === 'envelope') { editor.appendChild(buildEnvelopeCard(section)); continue; }
     const card = document.createElement('div'); card.className = 'card';
     card.innerHTML = `<h2>${section.label}</h2>`;
-    ps.forEach((p) => card.appendChild(buildControlRow(p)));
+    const knobBox = document.createElement('div'); knobBox.className = 'knobs';
+    const rows = document.createElement('div'); rows.className = 'rows';
+    ps.forEach((p) => (p.type === 'enum' ? rows : knobBox).appendChild(buildControl(p)));
+    if (rows.childElementCount) card.appendChild(rows);
+    if (knobBox.childElementCount) card.appendChild(knobBox);
     editor.appendChild(card);
   }
 }
@@ -199,7 +239,8 @@ function onEdit(p, value) {
   // A direct edit of an envelope stage may break the simple ADSR shape.
   if (ENV_SECTIONS.has(p.section)) {
     const env = ENV_BY_SECTION[p.section];
-    if (env && !env.advancedOnly) { refreshMacros(p.section); }
+    if (env && !env.advancedOnly) refreshMacros(p.section);
+    updateGraph(p.section);
   }
 }
 
@@ -217,6 +258,7 @@ function onMacroEdit(env, key, value) {
   sendEnvStages(env.section, activeLine);
   envCustom[activeLine][env.section] = false;
   updateBadge(env.section);
+  updateGraph(env.section);
 }
 
 function updateBadge(section) {
@@ -238,6 +280,7 @@ function refreshMacros(section) {
 function refreshControls() {
   for (const p of PARAMS) controls[p.id]?.set(getVal(p));
   for (const env of ENVELOPES) if (!env.advancedOnly) refreshMacros(env.section);
+  for (const env of ENVELOPES) updateGraph(env.section);
   document.getElementById('seedLabel').textContent = currentSeed == null ? 'seed —' : `seed ${currentSeed}`;
 }
 
