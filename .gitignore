@@ -12,3 +12,6 @@ ref-editor-script.js
 
 # Saved patches (user data)
 *.cz1.json
+
+# Build output (installers / packaged app)
+dist/

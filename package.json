@@ -1,15 +1,39 @@
 {
   "name": "cz1-mini-patch-generator",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Desktop patch generator / live editor for the Behringer CZ-1 MINI",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --enable-logging"
+    "dev": "electron . --enable-logging",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win"
   },
-  "author": "",
+  "author": "Nick Capron <60583068+nickcapron@users.noreply.github.com>",
   "license": "MIT",
+  "build": {
+    "appId": "com.nickcapron.cz1mini",
+    "productName": "CZ-1 MINI Patch Generator",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "CZ-1 MINI Patch Generator"
+    }
+  },
   "devDependencies": {
-    "electron": "^42.4.1"
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3"
   }
 }
